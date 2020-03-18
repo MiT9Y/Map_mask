@@ -6,7 +6,6 @@
 	this._sizeY = 1;
     var MaskCTX = this._mask.getContext('2d');
     MaskCTX.drawImage(img,0,0);
-    console.log(img.width);console.log(img.height);
 	this._maskdata = MaskCTX.getImageData(0, 0, img.width, img.height);
     this._currentColor = 0;
     
