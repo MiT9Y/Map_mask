@@ -1,0 +1,25 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+	<script src="GlassButton_ES5.js"></script>
+</head>
+
+<body>
+	<script>
+		var But1 = new GlassButton('Button1','1.png', function() {console.log('Test-1')});
+		But1.OnClickFunction = function() {
+			if (But2.scale) {But2.scale=false} else {But2.scale=true};
+			But2.X++;
+			But2.Y++;
+			But2.Size++;
+		}
+		But1.add(5,5,50);
+		var But2 = new GlassButton('Button2','1.png',function() {this.scale = true;console.log('Test-3');But1.drop();});
+		But2.add(65,5,50);
+		But2.scale = true;
+		But2.SetImage ('2.png');
+	</script>
+</body>
+
+</html>
