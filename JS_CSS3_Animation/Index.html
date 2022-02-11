@@ -1,0 +1,79 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<title>Animation</title>
+<style>
+	@keyframes play {
+		0%	{background-position:0px 0;}
+		100%{background-position:-434px 0;}
+	}
+	.move {
+		height: 91px; width: 62px;
+		background-image: url(soldiersprite.png);
+		margin: 0px; padding:0px;
+		position: absolute; left: 100px; top:100px;
+		transform: rotate(-30deg);
+		background-position:0px 0px;
+		animation: play 1s steps(7) infinite;
+		animation-play-state:paused;
+	}
+<!--	.move:hover {animation-play-state:running;}-->
+</style>
+<!--<script src="jquery.js"></script>-->
+</head>
+<body style="background-image: url(5.jpg);">
+	<script>
+		document.onmousedown = function () {return false;};
+		document.ontouchstart = function () {return false;};
+
+		for (i=0;i<10;i++){
+			var el = document.createElement('div');
+			el.className = "move";
+			el.ang = Math.random()*2*Math.PI;
+			el.x = Math.random()*(window.innerWidth-91);
+			el.y = Math.random()*(window.innerHeight-91);
+			el.go = new Object(el);
+			el.go.X0 = el.x-31; el.go.Y0 = el.y-45.5;
+			el.go.going = function(speedLine, speedAng){
+				let res = false;
+				if (this.x<(this.X0-1) || (this.X0+1)<this.x ||
+				    this.y<(this.Y0-1) || (this.Y0+1)<this.y) {					
+					let direction = Math.acos((this.y-this.Y0)/Math.pow( (Math.pow(this.x-this.X0,2)+Math.pow(this.y-this.Y0,2)) ,0.5));
+					if (this.x>this.X0) { direction = Math.PI*2-direction; };
+					if (!((direction-speedAng<this.ang)&&(direction+speedAng>this.ang))) {
+						let clockwise = direction-this.ang; if (clockwise<0) {clockwise += Math.PI*2;}
+						let counter_clockwise = this.ang-direction; if (counter_clockwise<0) {counter_clockwise += Math.PI*2;}
+						if (clockwise<counter_clockwise) {this.ang += speedAng;} else {this.ang -= speedAng;}
+					};
+					if (this.ang>Math.PI*2) {this.ang = this.ang-Math.PI*2};
+					if (this.ang<0) {this.ang = this.ang+Math.PI*2};
+					this.x += speedLine*Math.sin(this.ang);
+					this.y -= speedLine*Math.cos(this.ang);
+					this.style.transform="rotate("+this.ang+"rad)";
+					this.style.left = this.x+"px";
+					this.style.top = this.y+"px";
+					res = true};
+				return res;
+			};
+			el.id = "ID"+i;
+			el.style.left = el.x+"px";
+			el.style.top = el.y+"px";
+			el.style.transform="rotate("+el.ang+"rad)";
+			document.body.appendChild(el);
+			document.addEventListener("click",(function (_this) {
+				return function(event){
+					_this.go.X0 = event.pageX-31; _this.go.Y0 = event.pageY-45.5;
+					if (window.getComputedStyle(_this).animationPlayState == "paused"){
+						_this.style.animationPlayState = "running";
+						requestAnimationFrame(function run(time) {
+							if (_this.go.going(2,Math.PI/180)) {requestAnimationFrame(run);} else {_this.style.animationPlayState = "paused";}
+						});
+					};
+				};
+			})(el)
+			);
+		};
+		
+	</script>	
+</body>
+</html>
