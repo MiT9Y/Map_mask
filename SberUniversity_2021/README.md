@@ -1,17 +1,17 @@
 ![](MS_SQL.png)
 
-![](MS_SQL.png)
+![](Introduction_to_big_data.png)
 
-![](MS_SQL.png)
+![](Introduction_to_artificial_intelligence.png)
 
-![](MS_SQL.png)
+![](Fundamentals_of_linear_algebra.png)
 
-![](MS_SQL.png)
+![](Python_for_data_analysis.png)
 
-![](MS_SQL.png)
+![](Fundamentals_of_calculus.png)
 
-![](MS_SQL.png)
+![](Fundamentals_of_mathematical_statistics.png)
 
-![](MS_SQL.png)
+![](Python_basics.png)
 
-![](MS_SQL.png)
+![](Elements_of_mathematical_statistics_for_data_analysis.png)
