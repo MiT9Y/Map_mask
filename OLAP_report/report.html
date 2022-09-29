@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta content="text/html; charset=utf-8" http-equiv="content-type">
+		<meta http-equiv="X-UA-Compatible" content="IE=10">
+		<link rel="stylesheet" href="/css/fonts.css" type="text/css">
+		<link rel="stylesheet" href="/css/ReportStyle.css" type="text/css">
+		<link rel="stylesheet" href="/css/datepicker.min.css" type="text/css">
+		<link rel="stylesheet" href="/css/c3.css">
+		<script src="/js/jquery-3.3.1.min.js"></script>
+		<script src="/js/datepicker.min.js"></script>
+		<script src="/js/c3.js"></script>
+		<script src="/js/d3-5.4.0.min.js"></script>
+		<script src="/js/xlsx.full.min.js"></script>
+        <title>Оперативный еженедельный отчёт</title>
+    </head>
+	<body>
+
+		<script>
+			// Для экспорта в excel			
+			function doit(type, fn, dl) {
+				var elt = document.getElementById('data-table');
+				var wb = XLSX.utils.table_to_book(elt, {sheet:"Sheet JS"});
+				return dl ?
+					XLSX.write(wb, {bookType:type, bookSST:true, type: 'base64'}) :
+					XLSX.writeFile(wb, fn || ('SheetJSTableExport.' + (type || 'xlsx')));
+			}
+		</script>
+
+		<div id="Head">
+			<div class="Titel">Оперативный еженедельный отчёт директора филиала</div>
+			<div class="Interval">Выберите день отчётной недели:
+				<input id="InputWeek" type="text" readonly/>
+			</div>
+			<p id="xportbiff8" class="xport"><input type="submit" value="Экспортировать в XLS" onclick="doit('biff8', 'TableExport.xls');" style="float: right;"></p>
+			<div id="ReportData" style="clear: both;"></div>
+		</div>
+		<div id="ErrorDiv" style="display: none">
+		</div>
+		<div id="TableReportDiv" style="display: none">
+			<div id="MoveDivHead">
+			</div>
+			<div id="MoveDivInvisible">
+			</div>				
+			<div id="MoveDivBody">				
+			</div>
+		</div>
+	<div style="display: none;">
+		<div id="GraphicSelect" onclick="SelectGraph(event.target)"> 
+			<input type="radio" name="GraphicSelect" value="AbsoluteG" checked>ОТНОСИТЕЛЬНЫЕ показатели по ФИЛИАЛАМ
+			<input type="radio" name="GraphicSelect" value="RelativeG">АБСОЛЮТНЫЕ показатели филиала за месяц
+		</div>
+		<div id="Graphics" style="margin-top: 10px; display:block;">
+			<span style="padding-left: 0px;">Выберите отчётный месяц </span><input data-min-view="months" data-view="months" id="GrMonth" type="text" readonly/>
+			<span>Выберите филиал</span>
+			<select id="SelBra" onchange="DrawGraph(DateM, document.getElementById('SelBra').value, document.getElementById('SelInd').value);"></select>
+			<span>Выберите группу показателей</span>
+			<select id="SelInd" onchange="DrawGraph(DateM, document.getElementById('SelBra').value, document.getElementById('SelInd').value);"></select><br>
+			<span id="ReportMonth"></span><br>
+			<div id="GraphR"></div>
+		</div>
+		<div id="GraphicsAbs" style="margin-top: 10px; display:block;">
+			<table border="0" cellspacing="0" cellpadding="3" style="width:100%;height: 30px;">
+				<tr>
+					<td style="width:100px;font-size: 0.9rem;text-align: right">
+						Период отчёта
+					</td>
+					<td>
+						<input type="text" style="font-size: 1rem;width: 98%;" id="DataRange" data-view="months" data-min-view="months" data-range="true" readonly/>
+					</td>
+					<td style="width:100px;font-size: 0.9rem;text-align: right">
+						Частота отчёта
+					</td>
+					<td>
+						<select id="SelFreq" style="width: 100%" onchange="DrawGraph2(DateR,document.getElementById('SelFreq').value, document.getElementById('SelInd2').value);">
+							<option>ГОД</option>
+							<option>КВАРТАЛ</option>
+							<option>МЕСЯЦ</option>
+							<option>НЕДЕЛЯ</option>
+						</select>
+					</td>
+					<td style="width:100px;font-size: 0.9rem;text-align: right" onchange="DrawGraph2(DateR,document.getElementById('SelFreq').value, document.getElementById('SelInd2').value);">
+						Показатель
+					</td>
+					<td>
+						<select id="SelInd2" style="width: 100%">
+							<option>Поквартирная аварийность (Авар. заявки(шт.)/Кол-во газ. кв.(тыс. шт.))</option>												
+						</select>						
+					</td>
+				</tr>	
+			</table>
+			<div id="GraphR2"></div>
+		</div>
+	</div>
+
+		<script>
+			function ResizeGraphics(dX){
+				var El = document.getElementById('Graphics');
+				var ElAbs = document.getElementById('GraphicsAbs');
+				var ElG = document.getElementById('GraphR');
+				var ElG2 = document.getElementById('GraphR2');
+				if (document.documentElement.clientWidth>850) {
+					El.style.width = (document.documentElement.clientWidth-11)+'px';
+					ElAbs.style.width = (document.documentElement.clientWidth-11)+'px';
+					ElG.style.width = (document.documentElement.clientWidth-11+dX)+'px';
+					ElG2.style.width = (document.documentElement.clientWidth-11+dX)+'px';
+				} else {
+					El.style.width = '848px';
+					ElAbs.style.width = '848px';
+					ElG.style.width = '848px';
+					ElG2.style.width = '848px';
+				};
+				if (document.documentElement.clientHeight>600) {
+					El.style.height = (document.documentElement.clientHeight-38)+'px';
+					ElAbs.style.height = (document.documentElement.clientHeight-38)+'px';
+					ElG.style.height = (document.documentElement.clientHeight-100)+'px';
+					ElG2.style.height = (document.documentElement.clientHeight-100)+'px';
+				} else {
+					El.style.height = '552px';
+					ElAbs.style.height = '552px';
+					ElG.style.height = '500px';
+					ElG2.style.height = '500px';
+				};
+			}
+			function ResizeMoveHeadDiv(){
+				var BodyBCR=document.getElementById('MoveDivBody').getBoundingClientRect();
+				document.getElementById('MoveDivHead').style.width=BodyBCR.width+'px';
+			};
+			function ScrollMoveHeadDiv(){
+				var El = document.getElementById('MoveDivHead');
+				var HeadBCR=El.getBoundingClientRect();
+				var BodyBCR=document.getElementById('MoveDivBody').getBoundingClientRect();
+				ResizeMoveHeadDiv();
+				if ( (BodyBCR.top-HeadBCR.height)>=0 || (BodyBCR.top+BodyBCR.height-HeadBCR.height)<0 ){
+					El.style.position = "relative";
+					if ((BodyBCR.top+BodyBCR.height-HeadBCR.height)<0) El.style.top = BodyBCR.height+"px"; else El.style.top = "0px";
+					El.style.left = "0px";
+					document.getElementById('MoveDivInvisible').style.height = '0px';
+				};
+				if ((BodyBCR.top-HeadBCR.height)<0&&(BodyBCR.top+BodyBCR.height-HeadBCR.height)>=0) {
+					El.style.position = "fixed";
+					El.style.top = "0px";
+					El.style.left = BodyBCR.left+"px";
+					document.getElementById('MoveDivInvisible').style.height = HeadBCR.height + 'px';
+				};
+			};
+			function select_cell(e) {
+				if (e.target.id.substr(0,3)=='Bra'){
+					var b=e.target.id.substr(3);
+					var TableElement = document.getElementById('MoveDivBody').getElementsByTagName("td");
+					var NotPaintFlag = false;
+					for (key in TableElement) {
+						if (TableElement[key].id!==undefined)
+    						if (TableElement[key].id.search('bs')!=-1) {
+								if (TableElement[key].id.substring(TableElement[key].id.search('bs')+2,TableElement[key].id.search('e')) == b) NotPaintFlag = true;
+								if (TableElement[key].id.search('is')==-1) TableElement[key].style.backgroundColor='white';
+								TableElement[key].id = TableElement[key].id.replace("bs", "b");
+							};
+					};
+					if (!NotPaintFlag) {
+						for (key in TableElement) {
+							if (TableElement[key].id!==undefined)
+								if (TableElement[key].id.search('b'+b+'e')!=-1){
+									if (TableElement[key].id.search('is')==-1) TableElement[key].style.backgroundColor='yellow';
+									TableElement[key].id = TableElement[key].id.replace("b", "bs");
+								};
+						};
+					};
+				};
+			};
+			function select_row(e) {
+				if (e.target.id.substr(0,3)=='Ind'){
+					var i=e.target.id.substr(3);
+					var TableElement = document.getElementById('MoveDivBody').getElementsByTagName("td");
+					var NotPaintFlag = false;
+					var min = {v:null,el:[]};
+					var max = {v:null,el:[]};
+					for (key in TableElement) {						
+						if (TableElement[key].id!==undefined)
+							if (TableElement[key].id.search('is')!=-1){
+								if (TableElement[key].id.substring(TableElement[key].id.search('is')+2,TableElement[key].id.search('b')) == i) NotPaintFlag = true;
+								if (TableElement[key].id.search('bs')==-1){
+									TableElement[key].parentNode.style.backgroundColor='white';
+									TableElement[key].style.backgroundColor='white';
+								};
+								if (TableElement[key].id.search('bs')!=-1){
+									TableElement[key].style.backgroundColor='yellow';
+								}
+								TableElement[key].id = TableElement[key].id.replace("is", "i");
+							};
+					};
+					if (!NotPaintFlag) {
+						for (key in TableElement) {						
+							if (TableElement[key].id!==undefined)
+								if (TableElement[key].id.search('i'+i+'b')!=-1){
+									if (TableElement[key].id.search('itog')==-1) {
+										if (TableElement[key].textContent>max.v||max.v==null) {max.v = +TableElement[key].textContent; max.el.length = 0;};
+										if (TableElement[key].textContent==max.v) {max.el.push(TableElement[key])};
+										if (TableElement[key].textContent<min.v||min.v==null) {min.v = +TableElement[key].textContent; min.el.length = 0;};
+										if (TableElement[key].textContent==min.v) {min.el.push(TableElement[key])};										
+									};
+									if (TableElement[key].id.search('bs')==-1){
+										TableElement[key].parentNode.style.backgroundColor='yellow';
+										TableElement[key].style.backgroundColor='yellow';
+									};
+									TableElement[key].id = TableElement[key].id.replace("i", "is");
+								};
+						};
+					};
+					min.el.forEach(function(e){
+						e.style.backgroundColor = 'red';
+					});
+					max.el.forEach(function(e){
+						e.style.backgroundColor = 'green';
+					});
+				};
+			};
+			function SelectGraph(self){
+				if (self.tagName=='INPUT'){
+					if (self.value=='AbsoluteG') {document.getElementById('Graphics').style.display = 'none';  document.getElementById('GraphicsAbs').style.display = 'block';}
+					if (self.value=='RelativeG') {
+						document.getElementById('Graphics').style.display = 'block'; 
+						document.getElementById('GraphicsAbs').style.display = 'none';
+						DrawGraph(DateM, document.getElementById('SelBra').value, document.getElementById('SelInd').value);
+					}
+				}
+			};			
+			window.addEventListener("scroll", ScrollMoveHeadDiv);
+			window.addEventListener("resize", ResizeMoveHeadDiv);
+			window.addEventListener("resize", function(){ResizeGraphics(0);});		
+
+			Date.prototype.getStrDate = function(style){
+				var Res = '';
+				var Y = String(this.getFullYear());
+				var M = String(this.getMonth()+1);
+				var D = String(this.getDate());
+				var MName = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+				if (M.length == 1) M = '0'+M;
+				if (D.length == 1) D = '0'+D;
+				if (style == '-') Res = Y+'-'+M+'-'+D;
+				if (style == '.') Res = D+'.'+M+'.'+Y;
+				if (style == '') Res = Y+M+D;
+				if (style == 'M') Res = MName[(+M-1)]+' '+Y
+				return Res;
+			};
+			function Runxmlhttp(SQLText, F){
+//				console.log(SQLText);
+				var arg = [];
+				for (key in arguments) {if (key>1) {arg.push(arguments[key]);}};
+				var Out = {}; Out.connect = {};
+				Out.connect.Name = 'AdminOLAP';
+				Out.connect.Pas = '11111Ad';
+				Out.connect.Server = '10.73.135.131';
+				Out.connect.DB = 'OLAP';
+				Out.SQLText = SQLText;
+				var xmlhttp = new XMLHttpRequest();
+				xmlhttp.open("POST", "/SQLQuery.json", true);
+				xmlhttp.send(JSON.stringify(Out));
+				xmlhttp.onreadystatechange = function() {
+					if (xmlhttp.readyState != 4) return;
+					if (xmlhttp.status != 200) {alert(xmlhttp.status + ': ' + xmlhttp.statusText);} else {
+						arg.unshift(JSON.parse(xmlhttp.responseText));
+						F(arg);
+					}
+				};
+			};
+			function SetWeekReport(now,slip){
+				var DArr = [2, 3, 4, 5, 6, 0, 1];
+				var DWeek = now.getDay(); /*if (DWeek==0) DWeek = 7;*/
+				var begW = new Date(now); begW.setDate(begW.getDate()-(DArr[DWeek]+slip));
+				var endW = new Date(begW);endW.setDate(endW.getDate()+6);
+				document.getElementById('InputWeek').value = now.getStrDate('.');
+				document.getElementById('InputWeek').setAttribute('ThisDate',now.getStrDate('.'));
+				document.getElementById('ReportData').textContent = 'Отчёт сформирован с '+begW.getStrDate('.')+' по '+endW.getStrDate('.');
+				return [begW,endW];
+			};
+			function GetReport(DateW){
+				function BuildHTML(){
+					if (Branches.Done == true && Indicators.Done ==true && Data.Done == true){
+//						console.log(Branches.SQL.Data);
+//						console.log(Indicators.SQL.Data);
+//						console.log(Data.SQL.Data);
+						/*---------Изменение данных по процентам--------------*/
+//						for (var i = 0; i < Data.SQL.Data.Rows.length; i++) {
+//							switch(Data.SQL.Data.Rows[i][1]) {
+/*							case '37':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = 39;
+								Data.SQL.Data.Rows[j][2] = Data.SQL.Data.Rows[i+1][2]/Data.SQL.Data.Rows[i][2]*100;
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+								Data.SQL.Data.Rows[j+1] = [];
+								Data.SQL.Data.Rows[j+1][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j+1][1] = 42;
+								//Data.SQL.Data.Rows[j+1][2] = (Data.SQL.Data.Rows[i+1][2]*1+Data.SQL.Data.Rows[i+2][2]*1)/Data.SQL.Data.Rows[i][2]*100;
+								Data.SQL.Data.Rows[j+1][2] = (Data.SQL.Data.Rows[i+1][2]*1+Data.SQL.Data.Rows[i+3][2]*1+Data.SQL.Data.Rows[i+5][2]*1)/Data.SQL.Data.Rows[i][2]*100;
+								if (!isFinite(Data.SQL.Data.Rows[j+1][2])) Data.SQL.Data.Rows[j+1][2] = 0;
+							break;*/
+/*							case '65':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = 69;
+								Data.SQL.Data.Rows[j][2] = (Data.SQL.Data.Rows[i][2]*1 -
+														   (Data.SQL.Data.Rows[i+1][2]*1 +
+														   Data.SQL.Data.Rows[i+2][2]*1 +
+														   Data.SQL.Data.Rows[i+3][2]*1));
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+							break;
+							case '48':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = 55;
+								Data.SQL.Data.Rows[j][2] = (Data.SQL.Data.Rows[i+1][2]*1 +
+														   Data.SQL.Data.Rows[i+2][2]*1 +
+														   Data.SQL.Data.Rows[i+3][2]*1 +
+														   Data.SQL.Data.Rows[i+4][2]*1 +
+														   Data.SQL.Data.Rows[i+5][2]*1)/Data.SQL.Data.Rows[i][2]*100;
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+							break;
+							case '56':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = 63;
+								Data.SQL.Data.Rows[j][2] = (Data.SQL.Data.Rows[i+1][2]*1 +
+														   Data.SQL.Data.Rows[i+2][2]*1 +
+														   Data.SQL.Data.Rows[i+3][2]*1 +
+														   Data.SQL.Data.Rows[i+4][2]*1 +
+														   Data.SQL.Data.Rows[i+5][2]*1 +
+														   Data.SQL.Data.Rows[i+6][2]*1)/Data.SQL.Data.Rows[i][2]*100;
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+							break;
+							case '4':
+							case '7':
+							case '28':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = Data.SQL.Data.Rows[i][1] * 1 + 1;
+								Data.SQL.Data.Rows[j][2] = Data.SQL.Data.Rows[i][2]/Data.SQL.Data.Rows[i-1][2]*100;								
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+							break;
+							case '16':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = Data.SQL.Data.Rows[i][1] * 1 + 1;
+								Data.SQL.Data.Rows[j][2] = (Number(Data.SQL.Data.Rows[i][2])+Number(Data.SQL.Data.Rows[i-1][2]))/Data.SQL.Data.Rows[i-2][2]*100;
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+							break;
+							case '75':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = 90;
+								Data.SQL.Data.Rows[j][2] = Number(Data.SQL.Data.Rows[i][2])+Number(Data.SQL.Data.Rows[i+1][2]);
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+							break;
+							case '80':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = 91;
+								Data.SQL.Data.Rows[j][2] = Number(Data.SQL.Data.Rows[i][2])+Number(Data.SQL.Data.Rows[i+1][2]);
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+							break;
+							case '82':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = 92;
+								Data.SQL.Data.Rows[j][2] = Number(Data.SQL.Data.Rows[i][2])+Number(Data.SQL.Data.Rows[i+1][2]);
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+							break;
+							case '84':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = 93;
+								Data.SQL.Data.Rows[j][2] = Number(Data.SQL.Data.Rows[i][2])+Number(Data.SQL.Data.Rows[i+1][2])+Number(Data.SQL.Data.Rows[i+2][2]);
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+							break;
+							case '87':
+								var j = Data.SQL.Data.Rows.length;
+								Data.SQL.Data.Rows[j] = [];
+								Data.SQL.Data.Rows[j][0] = Data.SQL.Data.Rows[i][0];
+								Data.SQL.Data.Rows[j][1] = 94;
+								Data.SQL.Data.Rows[j][2] = Number(Data.SQL.Data.Rows[i][2])+Number(Data.SQL.Data.Rows[i+1][2])+Number(Data.SQL.Data.Rows[i+2][2]);
+								if (!isFinite(Data.SQL.Data.Rows[j][2])) Data.SQL.Data.Rows[j][2] = 0;
+							break;
+							}
+						}*/
+						/*---------Изменение данных по процентам--------------*/
+						//console.log(Data.SQL.Data);
+
+						document.getElementById('ErrorDiv').style.display = 'none';
+						document.getElementById('TableReportDiv').style.display = 'none';
+						if (!Branches.SQL.error && !Indicators.SQL.error && !Data.SQL.error){
+							if (Data.SQL.Data.Rows.length!=0){
+								var HeadTableReport = ['Филиалы','Наименование показателей'];
+								var BodyTableReport = [];
+								var IndicatorsHead = ''; var IndicatorsHeadIndex = 1;
+								var FHead = false;
+								Indicators.SQL.Data.Rows.forEach(function(element){
+//									console.log(element);
+									var NewIndicatorsHead = element[1].substring(0,element[1].indexOf("|"));
+									if (NewIndicatorsHead==IndicatorsHead){
+										BodyTableReport.push(['',element[1].replace(IndicatorsHead+'|',''),element[2]]);
+									} else {
+										IndicatorsHead = NewIndicatorsHead;
+										BodyTableReport.push([IndicatorsHeadIndex,IndicatorsHead]);
+										BodyTableReport.push(['',element[1].replace(IndicatorsHead+'|',''),element[2]]);
+										if (element[1].indexOf('из них')==-1)
+											IndicatorsHeadIndex++;
+									};
+									Branches.SQL.Data.Rows.forEach(function(elementB){
+										if (!FHead) HeadTableReport.push(elementB[1]);
+										var Fflag = false;
+										for(var i = 0; i < Data.SQL.Data.Rows.length; i++){
+											if (Data.SQL.Data.Rows[i][0]==elementB[0] && Data.SQL.Data.Rows[i][1]==element[0]){
+												Fflag = true;
+												BodyTableReport[BodyTableReport.length-1].push(Data.SQL.Data.Rows[i][2]);
+												break;
+											};
+										}
+										if (!Fflag) BodyTableReport[BodyTableReport.length-1].push('');
+									});
+									FHead=true;
+								});
+								var HTMLTable = '<table id="data-table" onclick="select_row(event)"><tr style="display: none;"><td colspan="3">Наименование показателей</td><td>ПУ "Клинцымежрайгаз"</td><td>ПУ "Новозыбковмежрайгаз"</td><td>Филиал Восточный</td><td>Филиал Западный</td><td>Филиал Северный</td><td>Филиал Центральный</td><td>Итого</td></tr>';
+								var index = 0;
+								BodyTableReport.forEach(function(i){
+									if (i.length<3) {
+										if (i[1] != 'из них')
+										{
+											HTMLTable += '<tr style="background:#A1A1A1"><td>'+(i[1] == 'из них' ? '4.1' : i[0])+'</td><td>'+i[1]+'</td>';
+											for(var i = 0; i < HeadTableReport.length-1; i++) {
+												if (i==0) HTMLTable += '<td style="border-left:none;"></td>'; else	HTMLTable += '<td></td>';
+											}
+											HTMLTable += '</tr>';
+										}
+									} else {
+										HTMLTable += '<tr style="background:white">';
+										i.forEach(function(j,ind){
+											if (ind==0) HTMLTable += '<td style="width:20px;">';
+											if (ind==1) HTMLTable += '<td id="Ind'+index+'" style="user-select:none; -moz-user-select: none; -webkit-user-select: none; -ms-user-select: none;">';
+											if (ind==2) HTMLTable += '<td style="border-left:none; text-align:right;width:40px;">';	
+											if (ind>2&&ind<HeadTableReport.length) HTMLTable += '<td id="i'+index+'b'+(ind-3)+'e" style="width:75px;text-align: center;">';
+											if (ind==HeadTableReport.length) HTMLTable += '<td id="i'+index+'b'+(ind-3)+'eitog" style="width:75px;text-align: center;">';	
+											if (!isNaN(j)&&j!='') HTMLTable +=Math.round(j*100)/100; else HTMLTable +=j;
+											HTMLTable += '</td>';
+										});
+										HTMLTable += '</tr>';
+										index ++;
+									};
+								});
+								HTMLTable += '</table>';
+								document.getElementById('MoveDivBody').innerHTML = HTMLTable;
+								HTMLTable = '<table onclick="select_cell(event)"><tr><td style="background: url(/img/fon.jpg) no-repeat; background-size: 100% 100%;">'+
+												'<div style="width:100%;height:50%;text-align:right;margin: 5px 0px -5px -10px;">'+HeadTableReport[0]+'</div>'+
+												'<div style="width:100%;height:50%;margin: -5px 0px 5px 10px;">'+HeadTableReport[1]+'</div></td>'
+								for(var i = 2; i < HeadTableReport.length; i++) {
+									HTMLTable += '<td id="Bra'+(i-2)+'" style="width:75px;text-align:center;font-size: 0.7rem;'+
+									'user-select:none; -moz-user-select: none; -webkit-user-select: none; -ms-user-select: none;">'+
+										        HeadTableReport[i].replace( / /g,'<br>') +'</td>';
+								};
+								HTMLTable += '</tr></table>';
+								document.getElementById('MoveDivHead').innerHTML = HTMLTable;
+								document.getElementById('TableReportDiv').style.display = 'block';
+								ResizeMoveHeadDiv();
+								ResizeGraphics();
+							} else {
+								document.getElementById('ErrorDiv').innerHTML='<H1>Таблица не содержит данных</H1>';
+								document.getElementById('ErrorDiv').style.display = 'block';
+							};
+						} else {
+							var HTMLText = '<H1>Ошибки запросов к БД:</H1>';
+							if (Branches.SQL.error) HTMLText += '<br>'+Branches.SQL.errorText;
+							if (Indicators.SQL.error) HTMLText += '<br>'+Indicators.SQL.errorText;
+							if (Data.SQL.error) HTMLText += '<br>'+Data.SQL.errorText;
+							document.getElementById('ErrorDiv').innerHTML = HTMLText;
+							document.getElementById('ErrorDiv').style.display = 'block';
+						};
+					};
+				};
+				var Branches = {}; Branches.SQL = {}; Branches.Done = false;
+				var Indicators = {}; Indicators.SQL = {}; Indicators.Done = false;
+				var Data = {}; Data.SQL = {}; Data.Done = false;
+				function ResSQL(arg){arg[1].SQL = arg[0];arg[1].Done = true;arg[2]();};
+				Runxmlhttp("SELECT id, [Name] FROM Branches where id<>32 UNION SELECT 10, 'Итого'",ResSQL,Branches,BuildHTML);
+				Runxmlhttp("SELECT id,[Name],Ed FROM Indicators where Visible = 1 ORDER BY Ordinal",ResSQL,Indicators,BuildHTML);
+				Runxmlhttp(	"CREATE TABLE #VarDataSetGen (id_Bra int, id_Ind int, [Count] real) "+
+						   	"INSERT INTO #VarDataSetGen "+
+                           	"SELECT id_Bra,id_Ind,[Count] FROM DataSetGen "+
+						   	"WHERE cast(id_Bra as varchar(20)) +cast(id_Ind as varchar(20))+convert(varchar(100),[Timestamp],113)  IN ( "+
+							"SELECT cast(id_Bra as varchar(20)) +cast(id_Ind as varchar(20))+convert(varchar(100),max([Timestamp]),113) FROM DataSetGen, Indicators "+
+							"WHERE Indicators.id=DataSetGen.id_Ind and Posted = 1 and BegDate >= '"+DateW[0].getStrDate('')+"' and EndDate <= '"+DateW[1].getStrDate('')+"' and [Sum_Flag] = 0 "+
+							"GROUP BY id_Bra,id_Ind) "+
+							"UNION "+
+							"SELECT id_Bra,id_Ind,sum([Count]) FROM DataSetGen, Indicators "+
+							"WHERE Indicators.id=DataSetGen.id_Ind and Posted = 1 and BegDate >= '"+DateW[0].getStrDate('')+"' and EndDate <= '"+DateW[1].getStrDate('')+"' and [Sum_Flag] = 1 "+
+							"GROUP BY id_Bra,id_Ind "+
+							"INSERT INTO #VarDataSetGen "+
+							"SELECT 10,id_Ind,AVG([Count]) FROM #VarDataSetGen, Indicators WHERE [Ed]='%' and Indicators.id = #VarDataSetGen.id_Ind "+
+							"GROUP BY id_Ind "+
+							"INSERT INTO #VarDataSetGen "+
+							"SELECT 10,id_Ind,SUM([Count]) FROM #VarDataSetGen, Indicators WHERE [Ed]<>'%' and Indicators.id = #VarDataSetGen.id_Ind "+
+							"GROUP BY id_Ind "+
+							"select * from #VarDataSetGen order by id_Bra, id_Ind "+
+							"DROP TABLE #VarDataSetGen ",ResSQL,Data,BuildHTML);
+			};
+			function GetMonthReport(now,slip){
+				var D = new Date(now);
+				D.setDate(D.getDate()+slip);
+				var begM = new Date(D.getFullYear(),D.getMonth(),1);
+				var endM = new Date(begM); endM.setMonth(endM.getMonth()+1);
+				var DBM = begM.getDay();if (DBM==0) DBM = 7;
+				if (DBM!=1) begM.setDate(begM.getDate()+(8-DBM));
+				DBM = endM.getDay();if (DBM==0) DBM = 7;
+				if (DBM!=1) endM.setDate(endM.getDate()+(7-DBM)); else endM.setDate(endM.getDate()-1);
+				document.getElementById('GrMonth').value = begM.getStrDate('M');
+				document.getElementById('GrMonth').setAttribute('ThisDate',begM.getStrDate('M'));
+				document.getElementById('ReportMonth').textContent = 'Выбран период с '+begM.getStrDate('.')+' по '+endM.getStrDate('.');
+				return [begM,endM];
+			};
+			function GetRangeReport(DR){
+				if (DR.length==2){
+					var begM = new Date(DR[0]);
+					var endM = new Date(DR[1].getFullYear(),DR[1].getMonth(),1); endM.setMonth(endM.getMonth()+1);
+					var DBM = begM.getDay();if (DBM==0) DBM = 7;
+					if (DBM!=1) begM.setDate(begM.getDate()+(8-DBM));
+					DBM = endM.getDay();if (DBM==0) DBM = 7;
+					if (DBM!=1) endM.setDate(endM.getDate()+(7-DBM)); else endM.setDate(endM.getDate()-1);
+					document.getElementById('DataRange').value = begM.getStrDate('.') + ' - ' + endM.getStrDate('.');
+					return [begM,endM];
+				} else {
+					document.getElementById('DataRange').value = 'Период отчёта не задан';
+					return [];
+				};
+			};
+			function DrawGraph(DM,B,I){
+				function AfterSQL(arg){
+					var before = {name:'',i:0};
+					var GData = {unload:true,xs:{},columns:[],types:{}};
+					var sumI = 0;
+					switch(arg[1]) {						
+						case 'Еженедельный отчет о состоянии газораспределительной системы, в т.ч.:':
+							if (arg[0].error) {console.log(arg[0].errorText)} else {
+								arg[0].Data.Rows.forEach(function(el) {
+									if (el[0]!=before.name){
+										before.name = el[0]; before.i ++;
+										GData.xs[before.name+', '+el[3]] = 'x'+before.i;
+										GData.columns.push([before.name+', '+el[3]],['x'+before.i]);
+										GData.types[before.name+', '+el[3]] = 'line';
+										before.i ++;
+										GData.xs[before.name+' (ВСЕГО), '+el[3]] = 'x'+before.i;
+										GData.columns.push([before.name+' (ВСЕГО), '+el[3]],['x'+before.i]);
+										GData.types[before.name+' (ВСЕГО), '+el[3]] = 'area';
+										sumI = 0;
+									};
+									sumI += +el[2];
+									GData.columns[(((before.i/2)-1)*4)].push(el[2]);
+									GData.columns[(((before.i/2)-1)*4)+1].push((new Date(el[1])).getStrDate('.'));
+									GData.columns[(((before.i/2)-1)*4)+2].push(sumI);
+									GData.columns[(((before.i/2)-1)*4)+3].push((new Date(el[1])).getStrDate('.'));
+								});
+							};							
+						break;
+						case 'Выполнение плана доходов по прочей деятельности':
+							if (arg[0].error) {console.log(arg[0].errorText)} else {
+								arg[0].Data.Rows.forEach(function(el) {
+									if (el[0]!='факт с начала месяца в процентах по прочей деятельности'){
+										if (el[0]!=before.name) {
+											before.name = el[0];
+											before.i ++;
+											if (before.name=='план на месяц по прочей деятельности'){
+												GData.xs[before.name+', '+el[3]] = 'x'+before.i;
+												GData.columns.push([before.name+', '+el[3]],['x'+before.i]);
+												GData.types[before.name+', '+el[3]] = 'line';												
+											}
+											if (before.name=='факт с начала месяца по прочей деятельности'){
+												before.i ++;
+												sumI = 0;
+												GData.xs[before.name+', '+el[3]] = 'x'+(before.i-1);
+												GData.columns.push([before.name+', '+el[3]],['x'+(before.i-1)]);
+												GData.types[before.name+', '+el[3]] = 'area';
+												GData.xs['факт по прочей деятельности, '+el[3]] = 'x'+before.i;
+												GData.columns.push(['факт по прочей деятельности, '+el[3]],['x'+before.i]);
+												GData.types['факт по прочей деятельности, '+el[3]] = 'line';
+											}
+										}
+										if (before.name=='план на месяц по прочей деятельности'){
+											GData.columns[(before.i-1)*2].push(el[2]);
+											GData.columns[((before.i-1)*2)+1].push((new Date(el[1])).getStrDate('.'));											
+										}
+										if (before.name=='факт с начала месяца по прочей деятельности'){
+											GData.columns[(before.i-2)*2].push(el[2]);
+											GData.columns[((before.i-2)*2)+1].push((new Date(el[1])).getStrDate('.'));
+											GData.columns[(before.i-1)*2].push(el[2]-sumI);
+											GData.columns[((before.i-1)*2)+1].push((new Date(el[1])).getStrDate('.'));																																	
+											sumI = el[2];
+										}
+									}
+								});
+							};							
+						break;
+						case 'Отчет о работе по заключению договоров по ТО ВДГО с физ. лицами':
+							if (arg[0].error) {console.log(arg[0].errorText)} else {								
+								arg[0].Data.Rows.forEach(function(el) {
+									if (el[3]!='%'){
+										if (el[0]!=before.name) {
+											sumI = el[2];
+											before.name = el[0];
+											before.i ++;
+											GData.xs[before.name+', '+el[3]] = 'x'+before.i;
+											GData.columns.push([before.name+', '+el[3]],['x'+before.i]);
+											if (before.name=='количество договоров на ТО ВДГО') {GData.types[before.name+', '+el[3]] = 'area';}
+											else {GData.types[before.name+', '+el[3]] = 'line';};
+										};
+										if (before.name!='количество заключенных договоров на ТО ВДГО за неделю'){
+											GData.columns[((before.i-1)*2)].push(el[2]-sumI);
+										} else {
+											GData.columns[((before.i-1)*2)].push(el[2]);
+										};
+										GData.columns[((before.i-1)*2)+1].push((new Date(el[1])).getStrDate('.'));
+									};
+								});
+							};
+						break;
+						case 'Отчет о работе по отключению неисправных газовых приборов у физ. лиц':
+							if (arg[0].error) {console.log(arg[0].errorText)} else {								
+								arg[0].Data.Rows.forEach(function(el) {
+									if (el[0]!=before.name) {
+										sumI = el[2];
+										before.name = el[0];
+										before.i ++;
+										GData.xs[before.name+', '+el[3]] = 'x'+before.i;
+										GData.columns.push([before.name+', '+el[3]],['x'+before.i]);
+										if (before.name=='отключено газовых приборов с начала года'||before.name=='заменено газовых приборов с начала года') {
+											GData.types[before.name+', '+el[3]] = 'area';}
+										else {GData.types[before.name+', '+el[3]] = 'line';};
+									};
+									if (before.name=='отключено газовых приборов с начала года'||before.name=='заменено газовых приборов с начала года') {
+										GData.columns[((before.i-1)*2)].push(el[2]-sumI);
+									} else {GData.columns[((before.i-1)*2)].push(el[2]);};
+									GData.columns[((before.i-1)*2)+1].push((new Date(el[1])).getStrDate('.'));
+								});
+							};
+						break;
+						case 'Отчет по установке приборов учета потребления газа':
+							if (arg[0].error) {console.log(arg[0].errorText)} else {
+								arg[0].Data.Rows.forEach(function(el) {
+									if (el[3]!='%'){
+										if (el[0]!=before.name) {
+											before.name = el[0];
+											before.i ++;
+											GData.xs[before.name+', '+el[3]] = 'x'+before.i;
+											GData.columns.push([before.name+', '+el[3]],['x'+before.i]);
+											if (before.name=='установлено с начала месяца'||before.name=='оформлено актов о недопуске за месяц') {
+												GData.types[before.name+', '+el[3]] = 'area';}
+											else {GData.types[before.name+', '+el[3]] = 'line';};
+										};
+										GData.columns[((before.i-1)*2)].push(el[2]);
+										GData.columns[((before.i-1)*2)+1].push((new Date(el[1])).getStrDate('.'));
+									};
+								});
+							}
+						break;
+						case 'Отчет о присоединении объектов газоснабжения':
+							if (arg[0].error) {console.log(arg[0].errorText)} else {
+								arg[0].Data.Rows.forEach(function(el) {
+									if (el[0]!=before.name) {
+										before.name = el[0];
+										sumI = el[2];
+										before.i ++;
+										GData.xs[before.name+', '+el[3]] = 'x'+before.i;
+										GData.columns.push([before.name+', '+el[3]],['x'+before.i]);
+										if (before.name=='количество объектов постороенных и сданных в эксплуатацию с начала месяца') {
+											GData.types[before.name+', '+el[3]] = 'area';}
+										else {GData.types[before.name+', '+el[3]] = 'line';};
+									};
+									if (before.name=='количество договоров на присоединение (находящихся на исполнении), всего') GData.columns[((before.i-1)*2)].push(el[2]-sumI)
+										else GData.columns[((before.i-1)*2)].push(el[2]);
+									GData.columns[((before.i-1)*2)+1].push((new Date(el[1])).getStrDate('.'));									
+								});
+							}
+						break;
+						case 'Отчет по обследованию потребителей газа включенных в "группу риска"':
+							if (arg[0].error) {console.log(arg[0].errorText)} else {
+								arg[0].Data.Rows.forEach(function(el) {
+									if (el[0]!=before.name) {
+										before.name = el[0];
+										sumI = el[2];
+										before.i ++;
+										GData.xs[before.name+', '+el[3]] = 'x'+before.i;
+										GData.columns.push([before.name+', '+el[3]],['x'+before.i]);
+										if (before.name=='обследовано с начала месяца') {
+											GData.types[before.name+', '+el[3]] = 'area';}
+										else {GData.types[before.name+', '+el[3]] = 'line';};
+									};
+									if (before.name=='всего количество абонентов включенных в "группу риска"') GData.columns[((before.i-1)*2)].push(el[2]-sumI)
+										else GData.columns[((before.i-1)*2)].push(el[2]);
+									GData.columns[((before.i-1)*2)+1].push((new Date(el[1])).getStrDate('.'));									
+								});
+							}
+						break;
+						case 'Отчет по торговле':
+							if (arg[0].error) {console.log(arg[0].errorText)} else {
+								arg[0].Data.Rows.forEach(function(el) {
+									if (el[3]!='%'){
+										if (el[0]!=before.name) {
+											before.name = el[0];
+											sumI = el[2];
+											before.i ++;
+											GData.xs[before.name+', '+el[3]] = 'x'+before.i;
+											GData.columns.push([before.name+', '+el[3]],['x'+before.i]);
+											if (before.name=='факт с начала месяца'||before.name=='количество ВДГО проданного по рекомендации за месяц'||before.name=='количество проданного ВДГО торг марок Baxi, Vaillant, Protherm за месяц') {
+												GData.types[before.name+', '+el[3]] = 'area';}
+											else {GData.types[before.name+', '+el[3]] = 'line';};
+										};
+										GData.columns[((before.i-1)*2)].push(el[2]);
+										GData.columns[((before.i-1)*2)+1].push((new Date(el[1])).getStrDate('.'));
+									}
+								});
+							}
+						break;
+					}
+					GraphR.load(GData);
+				};
+				Runxmlhttp("SELECT	REPLACE(Indicators.[Name],'"+I+"'+'|',''), EndDate, [Count], Indicators.Ed FROM DataSetGen, Indicators "+
+						   "where id_Ind in (select id from Indicators where [Name] like '"+I+"%') and "+
+	  					   "id_DS = 1 and Posted = 1 and id_Bra = (select id from Branches where [Name] = '"+B+"') and "+
+	  					   "BegDate>='"+DM[0].getStrDate('')+"' and EndDate<='"+DM[1].getStrDate('')+"' and DataSetGen.id_Ind = Indicators.id",
+						   AfterSQL,I);
+			};
+			function DrawGraph2(DR,F,I){
+				function AfterSQL(arg){
+					function GetAddDate(D,add){
+						var Res = new Date(D);
+						Res.setDate(Res.getDate()+add);
+						return Res;
+					}
+					var new_mounth = {flag:false,m:null};
+					var GraphData = [];					
+					var WD = new Date(DR[0]);
+					new_mounth.m = WD.getMonth();
+					WD.setDate(WD.getDate()-1);
+					while (DR[1]>WD) {
+						if (new_mounth.flag){
+							new_mounth.flag = false;
+							if (WD.getMonth()!=GetAddDate(WD,1).getMonth()) new_mounth.m = GetAddDate(WD,1).getMonth() 
+								else new_mounth.m = WD.getMonth();
+							if (F=='МЕСЯЦ') GraphData.push({D:new Date(WD)});
+							if (F=='КВАРТАЛ'&&(new_mounth.m==0||new_mounth.m==3||new_mounth.m==6||new_mounth.m==9)) GraphData.push({D:new Date(WD)});
+							if (F=='ГОД'&&new_mounth.m==0) GraphData.push({D:new Date(WD)});
+						}
+						WD.setDate(WD.getDate()+7);
+						if (F=='НЕДЕЛЯ') GraphData.push({D:new Date(WD)});
+						if (new_mounth.m!=WD.getMonth()||new_mounth.m!=GetAddDate(WD,1).getMonth()) new_mounth.flag = true;
+					}
+					if (GraphData.length==0) GraphData.push({D:new Date(DR[1])});
+					if (+GraphData[GraphData.length-1].D!=+DR[1]) GraphData.push({D:new Date(DR[1])});
+					var Gindex = 0;
+					var IndData = {};
+					var stop_flag = false;
+					for (var i=0;i<arg[0].Data.Rows.length;i++){						
+						while (new Date(arg[0].Data.Rows[i][3])>GetAddDate(GraphData[Gindex].D,1)){
+							GraphData[Gindex].I = IndData;
+							IndData = {};
+							Gindex++;
+							if (Gindex == GraphData.length){i = Data.Rows.length;break;}
+						}						
+						if (IndData[arg[0].Data.Rows[i][0]]==undefined) IndData[arg[0].Data.Rows[i][0]] = 0;
+						stop_flag = false;
+						var buffer = [];
+						while (!stop_flag) {
+							switch(I) {
+								case 'Поквартирная аварийность (Авар. заявки(шт.)/Кол-во газ. кв.(тыс. шт.))':
+									if (arg[0].Data.Rows[i][1]=='1') buffer[0] = +arg[0].Data.Rows[i][4];
+									if (arg[0].Data.Rows[i][1]=='6') buffer[1] = +arg[0].Data.Rows[i][4]/1000;
+								break;
+							}
+							if ((i+1) == arg[0].Data.Rows.length) {break;}
+							if (arg[0].Data.Rows[i][0]!=arg[0].Data.Rows[i+1][0]||arg[0].Data.Rows[i][3]!=arg[0].Data.Rows[i+1][3]) stop_flag = true; else i++;							
+						}
+						switch(I) {
+							case 'Поквартирная аварийность (Авар. заявки(шт.)/Кол-во газ. кв.(тыс. шт.))':								
+								if (buffer.length==2) IndData[arg[0].Data.Rows[i][0]] += buffer[0]/buffer[1];
+							break;
+						}
+					}
+					if (GraphData[Gindex].I==undefined) GraphData[Gindex].I = IndData;
+					GraphData.forEach(function(el) {
+						for (var key in el.I) {
+							if (GData.xs[key]==undefined){
+								GData.xs[key] = Object.keys(GData.xs).length;
+								GData.types[key] = 'bar';
+								GData.columns.push([key],[GData.xs[key]]);
+							}
+							GData.columns[GData.xs[key]*2].push(el.I[key]);
+							GData.columns[GData.xs[key]*2+1].push(el.D.getStrDate('.'));
+						}
+					});
+					GraphR2.load(GData);
+				}
+				var GData = {unload:true,xs:{},columns:[],types:{}};
+				if (DR.length==2){
+					Runxmlhttp(	"SELECT Branches.[Name], id_Ind, BegDate, EndDate, [Count] FROM DataSetGen, Branches "+
+						   		"where Branches.id = id_Bra and Posted = 1 and Marked=0 "+
+	  					   		"and BegDate>='"+DR[0].getStrDate('')+"' and EndDate<='"+DR[1].getStrDate('')+"' "+
+	  							"order by EndDate, Branches.[Name]",
+						   AfterSQL);
+				};
+			};
+
+			var now = new Date();
+//			now.setDate(now.getDate() + 2);//DELETE
+			var GraphR = c3.generate({
+				bindto: '#GraphR',
+				data: {
+					type: 'line',
+					xFormat: '%d.%m.%Y',
+            		columns: []
+				},
+				axis: {
+					x: {
+						type: 'timeseries',
+						tick: {format: '%d.%m.%Y'}
+					}
+				}
+			});
+			var GraphR2 = c3.generate({
+				bindto: '#GraphR2',
+				data: {
+					type: 'bar',
+					xFormat: '%d.%m.%Y',
+            		columns: []
+				},
+				axis: {
+					x: {
+						type: 'timeseries',
+						tick: {format: '%d.%m.%Y'}
+					}
+				},
+				bar: {width: {ratio: 0.9} }
+			});
+/*			if (now > Date.parse("2021-12-09") && now < Date.parse("2021-12-10"))//DELETE
+			{
+				var DateW = [new Date("2021-12-03"), new Date("2021-12-09")];
+				document.getElementById('InputWeek').value = now.getStrDate('.');
+				document.getElementById('InputWeek').setAttribute('ThisDate',now.getStrDate('.'));
+				document.getElementById('ReportData').textContent = 'Отчёт сформирован с '+DateW[0].getStrDate('.')+' по '+DateW[1].getStrDate('.');
+			}
+			else*/
+				var DateW = SetWeekReport(now,7);
+			var DateM = GetMonthReport(now,-7);
+			var DateR = [];
+
+			$('#InputWeek').datepicker({
+				onSelect: function(formattedDate, date, inst){
+					if (formattedDate!=''){
+						var DateW = SetWeekReport(date,0);
+						GetReport(DateW);
+					} else {document.getElementById('InputWeek').value = document.getElementById('InputWeek').getAttribute('ThisDate');};
+				}
+			});
+			$('#GrMonth').datepicker({
+				onSelect: function(formattedDate, date, inst){
+					if (formattedDate!=''){
+						DateM = GetMonthReport(date,0);
+						DrawGraph(DateM, document.getElementById('SelBra').value, document.getElementById('SelInd').value);
+					} else {document.getElementById('GrMonth').value = document.getElementById('GrMonth').getAttribute('ThisDate');};
+				}
+			});
+			var RangeDatePicker = $('#DataRange').datepicker({
+				onSelect: function(formattedDate, date, inst){
+					DateR = GetRangeReport(date);
+					DrawGraph2(DateR,document.getElementById('SelFreq').value, document.getElementById('SelInd2').value);
+				},
+				toggleSelected:false
+			}).data('datepicker');
+			RangeDatePicker.selectDate([new Date(now.getFullYear(), 0, 1),now]);
+			Runxmlhttp('SELECT [Name] FROM Branches where id<>32',function(arg){
+				var html = '';
+				arg[0].Data.Rows.forEach(function(El){
+					html += '<option>'+El+'</option>';
+				});
+				arg[1].innerHTML = html;
+			},document.getElementById('SelBra'));
+			Runxmlhttp("SELECT SUBSTRING([Name],1,CHARINDEX('|',[Name])-1) "+
+					   'FROM [OLAP].[dbo].[Indicators] '+
+					   "group by SUBSTRING([Name],1,CHARINDEX('|',[Name])-1) "+
+					   'order by min(Ordinal)',function(arg){
+				var html = '';
+				arg[0].Data.Rows.forEach(function(El){
+					html += '<option>'+El+'</option>';
+				});
+				arg[1].innerHTML = html;
+			},document.getElementById('SelInd'));
+			GetReport(DateW);	
+			document.getElementById('GraphicSelect').childNodes[1].checked = true;
+			document.getElementById('Graphics').style.display = 'none';
+		</script>
+	</body>
+</html>

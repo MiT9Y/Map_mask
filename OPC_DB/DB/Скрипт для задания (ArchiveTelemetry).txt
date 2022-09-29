@@ -1,0 +1,59 @@
+SET NOCOUNT ON; 
+
+Declare @index int
+Declare @NName varchar(20)
+Declare @FKName varchar(30)
+
+USE [Telemetry]
+
+Set @index = (select top 1 id from dbo.YearArchive order by [id] desc)
+IF @index is NULL Set @index=0
+
+Set @NName= 'History_Sens'+cast(@index+1 as varchar(8))
+Set @FKName = 'FK_SensHistory_Sensors'+cast(@index+1 as varchar(8))
+
+BEGIN TRANSACTION;
+EXEC sp_rename 'FK_SensHistory_Sensors', @FKName
+EXEC sp_rename 'History_Sens', @NName;
+
+insert into dbo.YearArchive(id, NameTab) values (@index+1,@NName)
+
+CREATE TABLE [dbo].[History_Sens](
+	[idSens] [int] NOT NULL,
+	[TagTime] [datetime] NOT NULL,
+	[TagVal] [varchar](256) NULL,
+	[SensVal] [varchar](256) NULL,
+	[Status] [int] NOT NULL,
+	CONSTRAINT [FK_SensHistory_Sensors] FOREIGN KEY([idSens]) REFERENCES [dbo].[Sensors] ([id])
+) ON [PRIMARY]
+
+CREATE NONCLUSTERED INDEX [IX_SensHistory_1] ON [dbo].[History_Sens] 
+([idSens] ASC) WITH (PAD_INDEX  = OFF, STATISTICS_NORECOMPUTE  = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS  = ON, ALLOW_PAGE_LOCKS  = ON) ON [PRIMARY]
+
+CREATE CLUSTERED INDEX [IX_SensHistory_2] ON [dbo].[History_Sens] 
+([TagTime] ASC) WITH (PAD_INDEX  = OFF, STATISTICS_NORECOMPUTE  = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS  = ON, ALLOW_PAGE_LOCKS  = ON) ON [PRIMARY]
+
+COMMIT;
+
+/*Удаление старых архивов*/
+Declare @StorageDepth int Set @StorageDepth = 365 /*Глубина хранения 365 дней*/
+DECLARE @NT varchar(20) 
+
+DECLARE Cur CURSOR FOR   
+select NameTab from dbo.YearArchive where DATEADD(day, @StorageDepth, DateCreate)<GETDATE()
+  
+OPEN Cur  
+  
+FETCH NEXT FROM Cur INTO @NT 
+  
+WHILE @@FETCH_STATUS = 0  
+BEGIN
+	BEGIN TRANSACTION;
+		Exec ('drop table '+@NT)
+		delete from dbo.YearArchive where NameTab=@NT
+	COMMIT;
+	FETCH NEXT FROM Cur INTO @NT
+END
+
+CLOSE Cur;  
+DEALLOCATE Cur;  

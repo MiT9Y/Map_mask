@@ -1,0 +1,171 @@
+SET NOCOUNT ON
+
+create table #Buffer (TN varchar(512),TV varchar(256), TS datetime)
+create INDEX Buf_TN ON #Buffer(TN)
+create INDEX Buf_TS ON #Buffer(TS)
+
+BEGIN TRANSACTION BufUpdate
+insert into #Buffer select * from BufferReadTag
+delete from BufferReadTag
+COMMIT TRANSACTION BufUpdate;
+
+DECLARE @TN varchar(512), @TV varchar(256), @TS datetime, @HistInt int
+
+--Глубина архива в днях
+Set @HistInt=7
+--Глубина архива в днях
+
+-- Добавление данных в BufferVectorTag
+insert into dbo.BufferVectorTag(TagName)
+select distinct TN from #Buffer where TN not in (select TagName from dbo.BufferVectorTag)
+
+DECLARE Cur CURSOR FOR
+	SELECT TN, TV, TS FROM #Buffer
+
+OPEN Cur
+FETCH NEXT FROM Cur INTO @TN, @TV, @TS
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+	update BufferVectorTag set Value = @TV, TagTimeStamp = @TS
+	where TagName=@TN
+	FETCH NEXT FROM Cur INTO @TN, @TV, @TS
+END
+
+CLOSE Cur
+DEALLOCATE Cur
+-- Добавление данных в BufferVectorTag
+
+-- Добавление данных в журнал
+--TypeMeas: 0-Тип не задан, 1-Тип состояния связи, 2-Тип дискретных датчиков, 3-Тип аналоговых датчиков, 4 - Тип управление, 5 - Тип периодическое управление (с установкой периода), 6 - Тип состояние связи по времени изменения тега, 7 - режим работы станции СКЗ (Потенциал, ток), 8 - Режим расчёта перепада на фильтре (разность давления до и после фильтра)
+--Status: 0-Нет связи, 1-Ошибка в работе датчика, 2-Датчик работает в границе предела, 3 - Датчик работает корректно, 4 - Датчик отключён
+DECLARE @idSens int, @TypeMeas int, @id_tagEd int, @idPSens int, @id_typeSens int, @NewValue varchar(256);
+DECLARE @Status int, @okdin int, @T1_I float, @T1_Val float, @T2_I float, @T2_Val float,@AINVal float;
+DECLARE @min_tok float, @max_tok float, @min_val float, @max_val float, @minlimit float, @maxlimit float;
+DECLARE @a float, @b float, @minSensL float, @maxSensR float;
+DECLARE @Pvh_V varchar(256), @idSens_Pvh int;
+DECLARE @Enable bit;
+
+DECLARE Cur CURSOR FOR						
+	select Sensors.id, TN, TS, TV, Enable from #Buffer, dbo.Sensors
+	where Sensors.TagName = TN and TS > DATEADD(day, -1*@HistInt, Getdate());
+OPEN Cur;
+	
+FETCH NEXT FROM Cur INTO @idSens, @TN, @TS, @TV, @Enable;
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+--
+	select TOP(1) @TypeMeas=Sensors.TypeMeas, @id_tagEd=Sensors.id_tagEd, @idPSens=Physical_Sensor.id, @id_typeSens=Physical_Sensor.id_typeSens
+		from dbo.Sensors inner join dbo.Physical_Sensor on Sensors.id_PSens=Physical_Sensor.id
+		where Sensors.id = @idSens;
+	
+	Set @Status=3; Set @NewValue=@TV;
+	
+	if (@Enable = 0) begin set @Status = 4; set @NewValue = 'Отключен'; end;
+	if @TypeMeas=8 begin
+		if (select top 1 [Enable] from dbo.Sensors where id = (Select top 1 SensID from dbo.Measure_FILTR where id=@idSens))= 0
+		begin set @Status = 4; set @NewValue = 'Отключен'; end;
+	end;
+
+   if @Status <> 4 begin
+	if @TypeMeas=2 begin
+		select @okdin=ok_din_status from dbo.Measure_DIN where id=@idSens;
+		if UPPER(@TV)='TRUE'or UPPER(@TV)='FALSE' begin
+			if  not(@okdin=CAST(@TV AS bit)) begin set @Status=1;end;
+		end else begin
+			if  not(@okdin=CAST(@TV AS int)) begin set @Status=1;end;			
+		end;
+	end;
+	
+	if @TypeMeas=3 or @TypeMeas=8 begin
+		SET @T1_I=-1; SET @T1_Val=-1; SET @T2_I=-1; SET @T2_Val=-1
+        set @AINVal=cast(REPLACE(@TV,',','.') as float); 
+        
+        SELECT TOP (1) @T1_I=T1_I, @T1_Val=T1_Val, @T2_I=T2_I, @T2_Val=T2_Val
+			FROM Poverka WHERE (id_PSens = @idPSens)AND(EnableEditAIN = 1) ORDER BY [Date] DESC;
+		select @min_tok=min_tok, @max_tok=max_tok, @min_val=min_val, @max_val=max_val
+			from TypeSens where id=@id_typeSens;
+		select @minlimit=min_below_zero_limit, @maxlimit=max_below_zero_limit
+			from dbo.Measure_AIN where id=@idSens;		
+
+		if @T1_I=-1 and @T1_Val=-1 and @T2_I=-1 and @T2_Val=-1 begin
+			if @id_tagEd=3 or @id_tagEd=4 or @id_tagEd=5 begin
+				if @id_tagEd=3 begin set @AINVal=@AINVal*1000;end;
+				if @id_tagEd=5 begin set @AINVal=@AINVal/1000;end;
+				set @AINVal=(((@max_val-@min_val)/(@max_tok-@min_tok))*(@AINVal-@min_tok))+@min_val;
+			end;
+		end else begin
+			if @id_tagEd<>3 and @id_tagEd<>4 and @id_tagEd<>5 begin
+				set @AINVal=(((@max_tok-@min_tok)/(@max_val-@min_val))*(@AINVal-@min_val))+@min_tok;
+			end else begin
+				if @id_tagEd=3 begin set @AINVal=@AINVal*1000;end;
+				if @id_tagEd=5 begin set @AINVal=@AINVal/1000;end;
+			end;
+			set @b = ((@T1_I*@T2_Val)-(@T2_I*@T1_Val))/(@T1_I-@T2_I);
+			set @a = (@T1_Val-@b)/@T1_I;
+			set @AINVal = (@a*@AINVal)+@b;				
+		end;
+        Set @minSensL=@min_val-((@max_val-@min_val)*@minlimit/100);
+        Set @maxSensR=@max_val+((@max_val-@min_val)*@maxlimit/100);
+        if @TypeMeas=8 begin
+			Set @idSens_Pvh = (Select top 1 SensID from dbo.Measure_FILTR where id=@idSens)
+			Set @Pvh_V = (select top 1 SensVal from History_Sens where idSens=@idSens_Pvh and TagTime = 
+				(select top 1 TagTime from dbo.History_Sens where idSens=@idSens_Pvh order by abs(DATEDIFF(millisecond, TagTime, @TS))) )
+			if @Pvh_V is not null Set @AINVal = cast(REPLACE(@Pvh_V,',','.') as float)-@AINVal else Set @AINVal=null
+        end
+        if ((@AINVal>@minSensL)and(@AINVal<@min_val)) begin Set @AINVal=@min_val; SET @Status=2; end;
+        if ((@AINVal>@max_val)and(@AINVal<@maxSensR)) begin Set @AINVal=@max_val; SET @Status=2; end;		
+		
+        if (@AINVal<=@minSensL)or(@AINVal>=@maxSensR)or (@AINVal is null) begin set @Status=1; end;
+        SET @NewValue=@AINVal;        
+	end;
+	
+	if @TypeMeas=6 begin
+		SET @NewValue=convert(varchar(128),@TS,104)+' '+convert(varchar(128),@TS,108)	
+	end;
+	
+	if @TypeMeas=7 begin
+		if @NewValue = '1' begin SET @NewValue='Потенциал' end
+		if @NewValue = '2' begin SET @NewValue='Ток' end
+	end;
+
+	if (@NewValue is NULL and @TypeMeas = 2) begin set @NewValue='False'; end;
+	if (@NewValue is NULL and @TypeMeas = 3) begin set @NewValue='0'; end;
+   end;
+	insert into History_Sens values (@idSens, @TS, @TV, @NewValue, @Status)
+
+	FETCH NEXT FROM Cur INTO @idSens, @TN, @TS, @TV, @Enable;
+END;
+
+CLOSE Cur;
+DEALLOCATE Cur;
+-- delete from History_Sens where TagTime < DATEADD(day, -1*@HistInt, Getdate())
+-- Добавление данных в журнал
+
+--Добавление текущих данных
+Declare @HStat int, @HSV varchar(256), @HTV varchar(256), @HTS datetime
+
+DECLARE Cur CURSOR FOR						
+	select Sensors.id, TagTimeStamp from dbo.Sensors
+OPEN Cur;
+	
+FETCH NEXT FROM Cur INTO @idSens, @TS;
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+	Set @HTS = Null
+	select top 1 @HStat=Status, @HSV=SensVal, @HTS=TagTime, @HTV=TagVal from dbo.History_Sens
+	where idSens=@idSens order by TagTime desc 
+	if (@HTS>@TS) or (@TS is null and @HTS is not null)  begin
+		update dbo.Sensors set Status=@HStat, SensVal=@HSV, TagTimeStamp=@HTS, TagValue=@HTV
+		where id=@idSens
+	end;
+	FETCH NEXT FROM Cur INTO @idSens, @TS;
+END;
+
+CLOSE Cur;
+DEALLOCATE Cur;
+--Добавление текущих данных
+
+drop table #Buffer

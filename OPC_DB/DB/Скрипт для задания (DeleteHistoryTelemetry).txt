@@ -1,0 +1,7 @@
+DECLARE @HistInt int
+
+--Глубина архива в днях
+Set @HistInt=7
+--Глубина архива в днях
+
+delete top(100000) from History_Sens where TagTime < DATEADD(day, -1*@HistInt, Getdate())
